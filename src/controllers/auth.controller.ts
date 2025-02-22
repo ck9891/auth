@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import prisma from "../prisma";
+import { assignToken } from "../utils/login";
 
 export type RegisterBody = {
   email: string;
@@ -55,7 +56,9 @@ export const login = async (req: Request, res: Response) => {
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-    res.status(200).json({ message: "Logged in successfully" });
+
+    const token = assignToken(user);
+    res.status(200).json({ message: "Logged in successfully", token });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Error logging in" });
