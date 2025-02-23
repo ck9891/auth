@@ -11,10 +11,27 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(uuid())
+  email     String    @unique
+  username  String    @unique
+  password  String // password is hashed
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  lastLogin DateTime?
+  isActive  Boolean   @default(true)
+  isAdmin   Boolean   @default(false)
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid())
+  token_identifier  String    @unique // Hashed version of the token
+  user_id           String
+  is_valid          Boolean
+  created_at        DateTime
+  expires_at        DateTime
+  revoked_at        DateTime?
+  revoked_reason    String?
+  issued_by_ip      String
+  user_agent        String // For tracking device/browser
+  previous_token_id String? // For token rotation tracking
 }
