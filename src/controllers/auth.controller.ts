@@ -1,20 +1,32 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import prisma from "../prisma";
-import { assignToken } from "../utils/login";
+import { assignToken, generateTokens } from "../utils/login";
+import { TokenResponse, AuthenticatedRequest } from '../types/auth.types';
 
-export type RegisterBody = {
+export interface RegisterBody {
   email: string;
   password: string;
   username: string;
 }
 
-export type LoginBody = {
+export interface LoginBody {
   email?: string;
   password: string;
   username?: string;
 }
 
+export interface LoginResponse {
+  message: string;
+  tokens: TokenResponse;
+}
+
+/**
+ * Registers a new user in the system
+ * @param req Express request containing email, password, and username in body
+ * @param res Express response
+ * @returns Created user object or error message
+ */
 export const register = async (req: Request, res: Response) => {
   console.log(req.body);
   const { email, password, username } = req.body as RegisterBody;
@@ -35,7 +47,13 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
-export const login = async (req: Request, res: Response) => {
+/**
+ * Authenticates a user and generates access/refresh tokens
+ * @param req Express request containing email/username and password in body
+ * @param res Express response
+ * @returns JWT tokens and success message or error message
+ */
+export const login = async (req: Request, res: Response<LoginResponse>) => {
   const { email, username, password } = req.body as LoginBody;
   try {
     const user = await prisma.user.findFirst({
@@ -50,18 +68,27 @@ export const login = async (req: Request, res: Response) => {
     console.log(user);
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        message: "Invalid credentials",
+        tokens: undefined
+      });
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        message: "Invalid credentials",
+        tokens: undefined
+      });
     }
 
-    const token = assignToken(user);
-    res.status(200).json({ message: "Logged in successfully", token });
+    const tokens = await generateTokens(user, req.ip, req.headers["user-agent"]);
+    res.status(200).json({ message: "Logged in successfully", tokens });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Error logging in" });
+    res.status(500).json({
+      message: "Error logging in",
+      tokens: undefined
+    });
   }
 }
 

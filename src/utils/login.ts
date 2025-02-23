@@ -1,17 +1,29 @@
 import jwt from "jsonwebtoken";
 import { User } from "@prisma/client";
 import prisma from "../prisma";
+import { JWTPayload, TokenResponse } from '../types/auth.types';
 
 const REFRESH_TOKEN_EXPIRATION = 14 * 24 * 60 * 60 * 1000; // 14 days
 const ACCESS_TOKEN_EXPIRATION = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Generates a JWT access token for a user
+ * @param user User object containing id and other user details
+ * @returns JWT access token string
+ */
 export function generateRefreshToken(user: User) {
   const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRATION,
   });
+  console.log('Generated refresh token:', token);
   return token;
 }
 
+/**
+ * Generates a JWT access token for a user
+ * @param user User object containing id and other user details
+ * @returns JWT access token string
+ */
 export function assignToken(user: User) {
   const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRATION,
@@ -19,14 +31,23 @@ export function assignToken(user: User) {
   return token;
 }
 
+/**
+ * Generates both access and refresh tokens for a user
+ * @param user User object
+ * @param ip IP address of the request
+ * @param userAgent User agent string from the request
+ * @returns Object containing access and refresh tokens
+ */
 export async function generateTokens(
   user: User,
   ip: string,
   userAgent: string
-) {
+): Promise<TokenResponse> {
   try {
     const accessToken = assignToken(user);
     const refreshToken = generateRefreshToken(user);
+
+    console.log('About to store refresh token:', refreshToken);
 
     const refreshTokenRecord = await prisma.refreshToken.create({
       data: {
@@ -46,13 +67,20 @@ export async function generateTokens(
 
     return { accessToken, refreshToken };
   } catch (error) {
-    console.error(error);
+    console.error('Error in generateTokens:', error);
     throw new Error("Failed to generate tokens: " + error.message);
   }
 }
 
-export async function verifyToken(token: string) {
+/**
+ * Verifies a refresh token against the database
+ * @param token Refresh token string to verify
+ * @returns Decoded JWT payload if valid
+ * @throws Error if token is invalid, expired, or not found
+ */
+export async function verifyToken(token: string): Promise<JWTPayload> {
   try {
+    console.log('Attempting to verify token:', token);
     const refreshTokenRecord = await prisma.refreshToken.findUnique({
       where: {
         token_identifier: token,
@@ -85,4 +113,17 @@ export async function invalidateRefreshToken(token: string) {
     where: { token_identifier: token },
     data: { is_valid: false },
   });
+}
+
+export async function renewTokens(refreshToken: string, ip: string, userAgent: string) {
+  const decoded = await verifyToken(refreshToken);
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.id },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return generateTokens(user, ip, userAgent);
 }

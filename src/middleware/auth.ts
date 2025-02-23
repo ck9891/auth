@@ -1,29 +1,32 @@
-// Middleware to check if the user is authenticated
-import { Request, Response, NextFunction } from "express";
-import { verifyToken } from "../utils/login";
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { JWTPayload, AuthenticatedRequest } from '../types/auth.types';
 
-export const authenticateUser = (
-  req: Request & { user: string },
+/**
+ * Middleware to authenticate requests using JWT
+ * @param req Express request with Authorization header
+ * @param res Express response
+ * @param next Next middleware function
+ * @returns Continues to next middleware if authenticated, returns 401 if not
+ */
+export const authenticateUser = async (
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
-  const token = req.headers.authorization;
   try {
-    if (!token) {
-      return res.status(401).json({ message: "Unauthorized" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
     }
 
-    const tokenString = token.split(" ")[1];
-
-    const decoded = verifyToken(tokenString);
-
-    if (!decoded) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET) as JWTPayload;
+    
     req.user = decoded;
     next();
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    console.error('Auth middleware error:', error);
+    return res.status(401).json({ message: 'Invalid token' });
   }
 };
